@@ -4,6 +4,24 @@ A tool to dump a MariaDB (MySQL) database to a file and upload it to S3 or MinIO
 
 ## Usage
 
+### Run dump all databases to MinIO bucket using Podman
+
+```bash
+podman run --rm \
+-e AWS_ACCESS_KEY_ID='<access-key-id>' \
+-e AWS_SECRET_ACCESS_KEY='<secret-access-key>' \
+-e S3_ENDPOINT='https://minio.example.com' \
+-e S3_BUCKET='dbdumps' \
+-e DB_HOST='localhost' \
+-e DB_PORT='3306' \
+-e DB_USER='root' \
+-e DB_PASSWORD='password' \
+-e DB_ALL_DATABASES='1' \
+-e DB_DUMP_PATH='/tmp' \
+-e DB_DUMP_FILE_KEEP_DAYS='7' \
+ghcr.io/stenstromen/s3dbdump:latest
+```
+
 ### Environment variables
 
 | Environment Variable     | Required | Default Value             | Description                         |
