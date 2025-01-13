@@ -1,6 +1,17 @@
 # s3dbdump
 
+![s3dbdump](s3dbdump.webp)
+
 A tool to dump a MariaDB (MySQL) database to a file and upload it to S3 or MinIO, with gzip compression.
+
+## Table of Contents
+
+- [s3dbdump](#s3dbdump)
+  - [Table of Contents](#table-of-contents)
+  - [Usage](#usage)
+    - [Run dump all databases to MinIO bucket using Podman](#run-dump-all-databases-to-minio-bucket-using-podman)
+    - [Example Kubernetes Cronjob](#example-kubernetes-cronjob)
+    - [Environment variables](#environment-variables)
 
 ## Usage
 
@@ -20,6 +31,99 @@ podman run --rm \
 -e DB_DUMP_PATH='/tmp' \
 -e DB_DUMP_FILE_KEEP_DAYS='7' \
 ghcr.io/stenstromen/s3dbdump:latest
+```
+
+### Example Kubernetes Cronjob
+
+```yaml
+apiVersion: v1
+data:
+  db-password: QUtJQTVYUVcyUFFFRUs1RktZRlM=
+  minio-access-key-id: QUtJQTVYUVcyUFFFRUs1RktZRlM=
+  minio-secret-access-key: czNjcjN0
+kind: Secret
+metadata:
+  name: db-dump-secrets
+  namespace: default
+type: Opaque
+
+---
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mariadb-backup-s3
+  namespace: default
+spec:
+  schedule: "0 6 * * *"
+  successfulJobsHistoryLimit: 0
+  concurrencyPolicy: Replace
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      activeDeadlineSeconds: 3600
+      backoffLimit: 2
+      template:
+        spec:
+          containers:
+            - env:
+                - name: DB_HOST
+                  value: database.default.svc.cluster.local
+                - name: DB_USER
+                  value: root
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-dump-secrets
+                      key: db-password
+                - name: DB_ALL_DATABASES
+                  value: "1"
+                - name: DB_DUMP_FILE_KEEP_DAYS
+                  value: "7"
+                - name: DB_DUMP_PATH
+                  value: /tmp
+                - name: S3_BUCKET
+                  value: dbbak
+                - name: S3_ENDPOINT
+                  value: http://minio.default.svc.cluster.local:9000
+                - name: AWS_ACCESS_KEY_ID
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-dump-secrets
+                      key: minio-access-key-id
+                - name: AWS_SECRET_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: db-dump-secrets
+                      key: minio-secret-access-key
+              securityContext:
+                runAsUser: 65534
+                runAsGroup: 65534
+                privileged: false
+                runAsNonRoot: true
+                readOnlyRootFilesystem: true
+                allowPrivilegeEscalation: false
+                procMount: Default
+                capabilities:
+                  drop: ["ALL"]
+                seccompProfile:
+                  type: RuntimeDefault
+              image: ghcr.io/stenstromen/s3dbdump:latest
+              imagePullPolicy: IfNotPresent
+              name: backup
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          dnsPolicy: ClusterFirst
+          restartPolicy: Never
+          schedulerName: default-scheduler
+          terminationGracePeriodSeconds: 30
+          volumes:
+            - name: tmp
+              emptyDir: {}
+
 ```
 
 ### Environment variables
