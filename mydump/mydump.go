@@ -21,6 +21,7 @@ func InitConfig() {
 	Config.AllowNativePasswords = true
 	Config.AllowCleartextPasswords = true
 	Config.Net = "tcp"
+	Config.ParseTime = true
 	db_port := os.Getenv("DB_PORT")
 	if db_port == "" {
 		db_port = "3306"
