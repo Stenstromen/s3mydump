@@ -1,12 +1,19 @@
 package mydump
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jamf/go-mysqldump"
 	"github.com/stenstromen/s3dbdump/mygzip"
@@ -143,4 +150,77 @@ func HandleDbDump(config mysql.Config) {
 		log.Printf("No database name provided")
 		return
 	}
+}
+
+func TestConnections() {
+	db, err := sql.Open("mysql", Config.FormatDSN())
+	if err != nil {
+		log.Fatalf("Failed to open database connection: %v", err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		log.Fatalf("Failed to ping database: %v", err)
+	}
+	log.Printf("Successfully connected to database")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var cfg aws.Config
+	if endpoint := os.Getenv("S3_ENDPOINT"); endpoint != "" {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion("us-east-1"),
+			config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+				os.Getenv("AWS_ACCESS_KEY_ID"),
+				os.Getenv("AWS_SECRET_ACCESS_KEY"),
+				"",
+			)),
+			config.WithEndpointResolver(aws.EndpointResolverFunc(
+				func(service, region string) (aws.Endpoint, error) {
+					return aws.Endpoint{
+						PartitionID:       "aws",
+						URL:               endpoint,
+						SigningRegion:     "us-east-2",
+						HostnameImmutable: true,
+					}, nil
+				},
+			)),
+		)
+	} else {
+		cfg, err = config.LoadDefaultConfig(ctx,
+			config.WithRegion(os.Getenv("AWS_REGION")),
+		)
+	}
+	if err != nil {
+		log.Fatalf("Failed to load AWS config: %v", err)
+	}
+
+	s3Client := s3.NewFromConfig(cfg)
+	_, err = s3Client.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
+		Bucket: aws.String(os.Getenv("S3_BUCKET")),
+	})
+	if err != nil {
+		log.Fatalf("Failed to connect to S3: %v", err)
+	}
+	log.Printf("Successfully connected to S3")
+
+	dumpDir := os.Getenv("DB_DUMP_PATH")
+	if dumpDir == "" {
+		dumpDir = "./dumps"
+	}
+
+	if err := os.MkdirAll(dumpDir, 0755); err != nil {
+		log.Fatalf("Failed to create dump directory: %v", err)
+	}
+
+	testFile := filepath.Join(dumpDir, ".write_test")
+	f, err := os.Create(testFile)
+	if err != nil {
+		log.Fatalf("Failed to write to dump directory: %v", err)
+	}
+	f.Close()
+	os.Remove(testFile)
+	log.Printf("Successfully verified write permissions to dump directory: %s", dumpDir)
 }

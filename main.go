@@ -9,5 +9,6 @@ import (
 func main() {
 	log.Printf("Starting s3dbdump")
 	mydump.InitConfig()
+	mydump.TestConnections()
 	mydump.HandleDbDump(mydump.Config)
 }
