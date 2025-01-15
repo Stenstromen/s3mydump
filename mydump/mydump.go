@@ -104,7 +104,7 @@ func dumpDatabase(database string, config mysql.Config) {
 
 	dumpDir := os.Getenv("DB_DUMP_PATH")
 	if dumpDir == "" {
-		dumpDir = "./dumps"
+		dumpDir = "/tmp/dumps"
 	}
 	dumpFilenameFormat := fmt.Sprintf("%s-20060102T150405", database)
 
@@ -208,7 +208,7 @@ func TestConnections() {
 
 	dumpDir := os.Getenv("DB_DUMP_PATH")
 	if dumpDir == "" {
-		dumpDir = "./dumps"
+		dumpDir = "/tmp/dumps"
 	}
 
 	if err := os.MkdirAll(dumpDir, 0755); err != nil {
